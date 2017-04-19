@@ -21,7 +21,7 @@ def read_data(test=True):
         print('processing start')
         index = 0
         for line in file:
-            if test and index > 10:
+            if test and index > 5:
                 break
             data.append(line.split(','))
             index += 1
@@ -41,16 +41,30 @@ def save_data_to_pickle(data, test=True):
     if not os.path.exists(pickle_dir):
         os.makedirs(pickle_dir)
 
-    for datum in data:
+    radar_maps_stddev, radar_maps_mean = 0, 0
+
+    for index, datum in enumerate(data):
         pickle_data = dict(zip(keys, parse_single_data(datum)))
         file_name = pickle_data['no']
+
+        radar_maps_mean += np.mean(pickle_data['radar_maps'])
+        radar_maps_stddev += np.std(pickle_data['radar_maps'])
+
+        if index % 500 == 0:
+            print('saving .. {}'.format(index))
+
         try:
-            with open(os.path.join(pickle_dir, file_name), 'wb') as f:
+            with open(os.path.join(pickle_dir, file_name+'.pickle'), 'wb') as f:
                 pickle.dump(pickle_data, f, pickle.HIGHEST_PROTOCOL)
         except Exception as e:
             print('pickle except')
             print(e)
 
+    print('mean == {}'.format(radar_maps_mean/len(data)))
+    print('std == {}'.format(radar_maps_stddev/len(data)))
+
+    # mean == 48.446656059536686
+    # std == 41.04652582906467
     return True
 
 
@@ -82,3 +96,6 @@ assert save_data_to_pickle(data)
 
 print('test done!')
 
+if __name__ == '__main__':
+    save_data_to_pickle(read_data(test=False), test=False)
+    print('save done!')
