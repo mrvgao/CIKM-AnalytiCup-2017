@@ -33,10 +33,10 @@ EMOJIS = ['\U0001f601', '\U0001f602', '\U0001f603', '\U0001f604']
 
 
 class Config:
-    learning_rate = 5 * 1e-6 # learning_rate
-    regularization_rate = 1e-1 # regularization rate
-    batch_size = 128
-    epoch = 50
+    learning_rate = 2 * 1e-2 # learning_rate
+    regularization_rate = 1e-3 # regularization rate
+    batch_size = 256
+    epoch = 100
     x_size = 101 * 101
     train_data_size = 2000
 
@@ -102,22 +102,31 @@ class RainRegression:
     def __add_model(self):
 
         FC_LAYER_1 = 'fc_layer_1'
+        FC_LAYER_2 = 'fc_layer_2'
 
         with tf.variable_scope('train_data') as scope:
             self.X_train = tf.placeholder(tf.float32, shape=(None, self.X_dimension))
             self.labels = tf.placeholder(tf.float32, shape=(None, ))
 
         with tf.variable_scope(FC_LAYER_1) as fc_scope:
-            self.weights_1 = tf.get_variable(name='weight_1', shape=(self.X_dimension, 1),
+            weights_1 = tf.get_variable(name='weight_1', shape=(self.X_dimension, 1),
                                              initializer=tf.truncated_normal_initializer(stddev=0.02))
 
-            self.bias_1 = tf.get_variable(name='bias_1', shape=(),
+            bias_1 = tf.get_variable(name='bias_1', shape=(),
                                           initializer=tf.constant_initializer(0.0))
 
         with tf.variable_scope(FC_LAYER_1, reuse=True) as fc_scope:
             fc_scope.reuse_variables()
-            self.layout_1_output = tf.matmul(self.X_train, self.weights_1) + self.bias_1
-            self.layout_1_output = tf.abs(self.layout_1_output)
+            layout_1_output = tf.abs(tf.matmul(self.X_train, weights_1) + bias_1)
+
+        with tf.variable_scope('tanh_1') as relu_scope:
+            tanh_output = tf.tanh(layout_1_output)
+
+        with tf.variable_scope(FC_LAYER_2) as fc_2_scope:
+            a = tf.get_variable(name='a', shape=(), initializer=tf.truncated_normal_initializer(stddev=0.02))
+            b = tf.get_variable(name='b', shape=(), initializer=tf.zeros_initializer())
+
+            layout_2_output = tf.abs(a * tanh_output + b)
 
         # with tf.variable_scope('relu_layer_1') as relu_scope:
         #     self.layout_1_output = tf.nn.relu(self.layout_1_output)
@@ -129,14 +138,14 @@ class RainRegression:
         #     self.b = tf.Variable(tf.zeros(shape=()))
         #
 
-        need_regularize = [self.weights_1, self.bias_1]
+        need_regularize = [weights_1, bias_1, a, b]
 
         l2_loss = sum(map(lambda w: tf.nn.l2_loss(w), need_regularize))
 
         tf.add_to_collection(name='l2_loss', value=l2_loss)
 
         with tf.variable_scope('get_value') as predict:
-            self.yhat = self.layout_1_output
+            self.yhat = layout_2_output
             # self.yhat = tf.matmul(self.layout_1_output, self.a) + self.b
 
         with tf.variable_scope('loss') as loss_scope:
@@ -194,7 +203,7 @@ class RainRegression:
 
             feed_dict = {self.X_train: train_data, self.labels: train_labels}
 
-            bias = self.bias_1.eval()
+            # bias = self.bias_1.eval()
             # print('bias before training is: {}'.format(bias))
 
             L, _, labels, yhat = sess.run(
@@ -202,7 +211,7 @@ class RainRegression:
                 feed_dict=feed_dict
             )
 
-            bias = self.bias_1.eval()
+            # bias = self.bias_1.eval()
 
             # print('bias: {}'.format(bias))
 
@@ -309,7 +318,7 @@ class RainRegression:
         starter_learning_rate = self.config.learning_rate
         # learning_rate = starter_learning_rate
         learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
-                                                   5000, 0.96, staircase=True)
+                                                   10000, 0.96, staircase=True)
 
         op = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss=L)
 
