@@ -33,7 +33,7 @@ EMOJIS = ['\U0001f601', '\U0001f602', '\U0001f603', '\U0001f604']
 
 
 class Config:
-    learning_rate = 1e-3 # learning_rate
+    learning_rate = 2.5 * 1e-4 # learning_rate
     regularization_rate = 1e-3 # regularization rate
     batch_size = 256
     epoch = 100
@@ -46,7 +46,7 @@ class Config:
     TIME = 15
     HEIGHT = 4
 
-    hidden_size = 150
+    hidden_size = [150, 150]
 
 
 np.random.seed(0)
@@ -112,10 +112,10 @@ class RainRegression:
         fc_layer_1 = 'fc_layer_1'
         with tf.variable_scope(fc_layer_1) as fc_scope:
             WEIGHT_1, BIAS_1 = 'weight_1', 'bias_1'
-            weights_1 = tf.get_variable(name=WEIGHT_1, shape=(self.X_dimension, self.config.hidden_size),
-                                        initializer=tf.truncated_normal_initializer(stddev=0.05))
+            weights_1 = tf.get_variable(name=WEIGHT_1, shape=(self.X_dimension, self.config.hidden_size[0]),
+                                        initializer=tf.contrib.layers.xavier_initializer())
 
-            bias_1 = tf.get_variable(name=BIAS_1, shape=(self.config.hidden_size, ),
+            bias_1 = tf.get_variable(name=BIAS_1, shape=(self.config.hidden_size[0], ),
                                      initializer=tf.constant_initializer(0.0))
 
             tf.add_to_collection(name=parameters, value=weights_1)
@@ -131,42 +131,52 @@ class RainRegression:
             layout_1_output = tf.matmul(self.X_train, weights_1) + bias_1
             layout_1_output = tf.nn.dropout(layout_1_output, keep_prob=self.config.drop_out)
 
-            # (batches, X_dimension) * (X_dimension, hidden_size) + (hidden_size, ) = (batches, hidden_size)
+            # (batches, X_dimension) * (X_dimension, hidden_size_0) + (hidden_size_0, ) = (batches, hidden_size_0)
 
-        with tf.variable_scope('tanh_1') as relu_scope:
-            tanh_output = tf.tanh(layout_1_output)
+        with tf.variable_scope('relu_1') as relu_scope:
+            tanh_output = tf.nn.relu(layout_1_output)
             tanh_output = tf.nn.dropout(tanh_output, keep_prob=self.config.drop_out)
 
         fc_layer_2 = 'fc_layer_2'
         with tf.variable_scope(fc_layer_2) as fc_2_scope:
-
-            weights_2 = tf.get_variable(name='weights_2', shape=(self.config.hidden_size, 1),
-                                        initializer=tf.truncated_normal_initializer(stddev=0.05))
-            bias_2 = tf.get_variable(name='bias_2', shape=(), initializer=tf.zeros_initializer())
+            weights_2 = tf.get_variable(name='weights_2', shape=(self.config.hidden_size[0], self.config.hidden_size[1]),
+                                        initializer=tf.contrib.layers.xavier_initializer(seed=0))
+            bias_2 = tf.get_variable(name='bias_2', shape=(self.config.hidden_size[1], ),
+                                     initializer=tf.zeros_initializer())
 
             # tanh output size is (batches, hidden_size)
-            # weights_2 size is (hidden_size, 1), bias is scalar
-            # layout_2_output = (batches, hidden) * (hidden_size, 1) + bias_2 = (batches, 1)
+            # weights_2 size is (hidden_size_0, hidden_size_1), bias is (hidden_size[1], )
+            # layout_2_output = (batches, hidden_0) * (hidden_0, hidden_1) + bias_2 = (batches, hidden_1)
 
             # layout_2_output = tf.abs(tf.matmul(tanh_output, weights_2) + bias_2)
-            layout_2_output = tf.abs(tf.matmul(tanh_output, weights_2) + bias_2)
+            layout_2_output = tf.matmul(tanh_output, weights_2 + bias_2)
+            layout_2_output = tf.nn.dropout(layout_2_output)
 
             tf.add_to_collection(name=parameters, value=weights_2)
             tf.add_to_collection(name=parameters, value=bias_2)
 
-        # with tf.variable_scope('relu_layer_1') as relu_scope:
-        #     self.layout_1_output = tf.nn.relu(self.layout_1_output)
-        #
+        with tf.variable_scope('tanh_1') as tanh:
+            tanh_output = tf.tanh(layout_2_output)
+
+        with tf.variable_scope('regression') as regression_scope:
+            a = tf.get_variable('a', shape=(self.config.hidden_size[-1], 1),
+                                initializer=tf.contrib.layers.xavier_initializer(seed=0))
+
+            b = tf.get_variable('b', shape=(), initializer=tf.zeros_initializer())
+
+            regression = tf.abs(tf.matmul(tanh_output, a) + b)
+
+            tf.add_to_collection(name=parameters, value=a)
+            tf.add_to_collection(name=parameters, value=b)
 
         need_regularize = tf.get_collection(key=parameters)
 
-        l2_loss = sum(map(lambda w: tf.nn.l2_loss(w), need_regularize))
+        l2_loss = np.mean(map(lambda w: tf.nn.l2_loss(w), need_regularize))
 
         tf.add_to_collection(name='l2_loss', value=l2_loss)
 
         with tf.variable_scope('get_value') as predict:
-            self.yhat = layout_2_output
-            # self.yhat = tf.matmul(self.layout_1_output, self.a) + self.b
+            self.yhat = regression
 
         with tf.variable_scope('loss') as loss_scope:
             self.loss = self.loss(self.yhat)
