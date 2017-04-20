@@ -33,12 +33,15 @@ EMOJIS = ['\U0001f601', '\U0001f602', '\U0001f603', '\U0001f604']
 
 
 class Config:
-    learning_rate = 2 * 1e-2 # learning_rate
+    learning_rate = 3 * 1e-2 # learning_rate
     regularization_rate = 1e-3 # regularization rate
     batch_size = 256
-    epoch = 100
-    x_size = 101 * 101
+    epoch = 200
+    crop_center = 101
+    # x_size = 101 * 101
+    x_size = crop_center * crop_center
     train_data_size = 2000
+    drop_out = 0.6
 
     TIME = 15
     HEIGHT = 4
@@ -98,7 +101,6 @@ class RainRegression:
 
         return data_cache
 
-
     def __add_model(self):
 
         FC_LAYER_1 = 'fc_layer_1'
@@ -118,9 +120,11 @@ class RainRegression:
         with tf.variable_scope(FC_LAYER_1, reuse=True) as fc_scope:
             fc_scope.reuse_variables()
             layout_1_output = tf.abs(tf.matmul(self.X_train, weights_1) + bias_1)
+            layout_2_output = tf.nn.dropout(layout_1_output, keep_prob=self.config.drop_out)
 
         with tf.variable_scope('tanh_1') as relu_scope:
             tanh_output = tf.tanh(layout_1_output)
+            tanh_output = tf.nn.dropout(tanh_output, keep_prob=self.config.drop_out)
 
         with tf.variable_scope(FC_LAYER_2) as fc_2_scope:
             a = tf.get_variable(name='a', shape=(), initializer=tf.truncated_normal_initializer(stddev=0.02))
@@ -154,6 +158,10 @@ class RainRegression:
         with tf.variable_scope('op') as op_scope:
             # op_scope.reuse_variables()
             self.op = self.optimizer(self.loss)
+
+    def __conv_net(self, input):
+        input = 
+
 
     def split_test_train(self):
         '''
@@ -265,11 +273,29 @@ class RainRegression:
     #
     #     return compressed
 
-    @staticmethod
-    def compress_radar_maps(radar_maps):
-        mean = np.mean(radar_maps, axis=(0, 1))
-        compressed = mean.flatten()
+    def compress_radar_maps(self, radar_maps):
+        # time_mean = np.mean(radar_maps, axis=0)
+        # height_mean = np.mean(radar_maps, axis=1) # get mean of different height.
 
+        # time_weight = [np.exp(1)] * 5 + [np.exp(2)] * 5 + [np.exp(3)]*5
+        # time_weight = [0] * 14 + [1]
+        # height_weight = [0] * 3 + [1]
+        # height_weight = np.array(height_weight)
+        # height_weight = height_weight / np.sum(height_weight)
+        #
+        # for t in range(time_mean.shape[0]):
+        #     time_mean[t] *= height_weight[t]
+        #
+        # height_weighted_mean = np.mean(time_mean, axis=0)
+        time_height_mean = np.mean(radar_maps, axis=(0, 1))
+        # x, y = time_height_mean.shape
+        # start_x = x // 2 - (self.config.crop_center // 2)
+        # start_y = y // 2 - (self.config.crop_center // 2)
+        #
+        # cropped = time_height_mean[start_y: start_y+self.config.crop_center, start_x: start_x+self.config.crop_center]
+        # compressed = cropped.flatten()
+
+        compressed = time_height_mean.flatten()
         return compressed
 
     def train(self):
