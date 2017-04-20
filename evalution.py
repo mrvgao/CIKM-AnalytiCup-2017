@@ -9,16 +9,18 @@ import tensorflow as tf
 import numpy as np
 
 
-def loss(yhat, y):
-    return np.mean((yhat - y) ** 2)
+def RMSE(yhat, y):
+    # RMSE
+    return np.sqrt(np.mean((yhat - y) ** 2))
 
 
 yhat = np.array([1, 2, 3])
 y = np.array([1, 0, 3])
-L = loss(yhat, y)
+L = RMSE(yhat, y)
 
 assert L != 0
 assert L is not None
+assert isinstance(L, float)
 
-print('test done!')
+
 
