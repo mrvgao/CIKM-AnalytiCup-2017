@@ -322,9 +322,11 @@ class RainRegression:
         # height_weighted_mean = np.mean(time_mean, axis=0)
         time_height_mean = np.mean(radar_maps, axis=(0, 1))
         x, y = time_height_mean.shape
-        start_x = x // 2 - (self.config.crop_center // 2)
-        start_y = y // 2 - (self.config.crop_center // 2)
+        # start_x = x // 2 - (self.config.crop_center // 2)
+        # start_y = y // 2 - (self.config.crop_center // 2)
 
+        start_x = 0
+        start_y = 0
         cropped = time_height_mean[start_y: start_y+self.config.crop_center, start_x: start_x+self.config.crop_center]
         compressed = cropped.flatten()
 
