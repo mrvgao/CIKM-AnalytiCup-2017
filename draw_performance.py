@@ -13,13 +13,18 @@ def track_plot(func):
 
         loss, trRMSE, valRSME = func(*args, **kwargs)
 
-        wrapper.loss.append(loss)
-        wrapper.trRSME.append(trRMSE)
-        wrapper.valRSME.append(valRSME)
+        if isinstance(loss, list):
+            wrapper.loss += loss
+            wrapper.trRSME += trRMSE
+            wrapper.valRSME += valRSME
+        else:
+            wrapper.loss.append(loss)
+            wrapper.trRSME.append(trRMSE)
+            wrapper.valRSME.append(valRSME)
 
         plt.clf()
         plt.subplot(2, 1, 1)
-        x = range(wrapper.called)
+        x = range(len(wrapper.loss))
 
         plt.plot(x, wrapper.loss, 'g-')
         plt.title('Train Loss')
