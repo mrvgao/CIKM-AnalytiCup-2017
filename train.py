@@ -33,21 +33,22 @@ EMOJIS = ['\U0001f601', '\U0001f602', '\U0001f603', '\U0001f604']
 
 
 class Config:
-    learning_rate = 5 * 1e-6 # learning_rate
-    regularization_rate = 1e-3 # regularization rate
+    learning_rate = 4 * 1e-6 # learning_rate
+    regularization_rate = 1e-1 # regularization rate
     batch_size = 256
     epoch = 100
     crop_center = 10
-    # x_size = 101 * 101
-    x_size = crop_center * crop_center
-    train_data_size = 2000
-    drop_out = 0.5
+    location = 101
 
     TIME = 15
     HEIGHT = 4
 
-    hidden_size = [5000, 5000]
+    train_data_size = 1000
+    drop_out = 0.5
 
+    hidden_size = [1000, 1000]
+
+    matrix_keep_prob = 0.03
 
 np.random.seed(0)
 
@@ -55,7 +56,9 @@ np.random.seed(0)
 class RainRegression:
     def __init__(self, test=True):
         self.config = Config()
-        self.X_dimension = self.config.x_size
+
+        self.X_dimension, self.keep_indices = self.__get_x_dimension()
+
         self.__add_model()
 
         self.train_indices, self.validation_indices, self.test_indices = self.split_test_train()
@@ -68,6 +71,18 @@ class RainRegression:
         self.cache = self.__load_data()
 
         assert len(self.train_indices) / self.config.batch_size >= 1
+
+    def __get_x_dimension(self):
+
+        random_matrix = np.random.rand(self.config.TIME, self.config.HEIGHT, self.config.location, self.config.location)
+
+        random_matrix[random_matrix > self.config.matrix_keep_prob] = 0
+
+        keep_indices = random_matrix.nonzero()
+
+        X_dimension = random_matrix[keep_indices].shape[0]
+
+        return X_dimension, keep_indices
 
     def __load_data(self):
         '''
@@ -159,11 +174,13 @@ class RainRegression:
             tanh_output = tf.tanh(layout_2_output)
 
         with tf.variable_scope('regression') as regression_scope:
-            a = tf.get_variable('a', shape=(self.config.hidden_size[-1], 1),
-                                initializer=tf.contrib.layers.xavier_initializer(seed=0))
+            # shape = (self.X_dimension, 1)
+            shape = (self.config.hidden_size[-1], 1)
+            a = tf.get_variable('a', shape=shape, initializer=tf.contrib.layers.xavier_initializer(seed=0))
 
             b = tf.get_variable('b', shape=(), initializer=tf.zeros_initializer())
 
+            # regression = tf.abs(tf.matmul(tanh_output, a) + b)
             regression = tf.abs(tf.matmul(tanh_output, a) + b)
 
             tf.add_to_collection(name=parameters, value=a)
@@ -279,7 +296,8 @@ class RainRegression:
             else:
                 print('.', end='')
 
-        return sum(losses)/len(losses), sum(RMSEs)/len(RMSEs), sum(val_RMSEs)/len(val_RMSEs)
+        # return sum(losses)/len(losses), sum(RMSEs)/len(RMSEs), sum(val_RMSEs)/len(val_RMSEs)
+        return losses, RMSEs, val_RMSEs
 
     def validation_accuracy(self, sess):
         validation_data, validation_labels = self.get_data_by_indices(self.validation_indices)
@@ -307,6 +325,18 @@ class RainRegression:
     #     return compressed
 
     def compress_radar_maps(self, radar_maps):
+
+        compressed = radar_maps[self.keep_indices]
+        return compressed
+
+        # input data is TIME * HEIGHT * 101 * 101, if we get the random submatrix
+        # for example 0.2
+
+        # random_matrix = np.random.rand(*radar_maps.shape)
+        # random_matrix[random_matrix > self.config.matrix_keep_prob] = 0
+        #
+        # keep_matrix = radar_maps[random_matrix.nonzero()]
+
         # time_mean = np.mean(radar_maps, axis=0)
         # height_mean = np.mean(radar_maps, axis=1) # get mean of different height.
 
@@ -318,20 +348,26 @@ class RainRegression:
         #
         # for t in range(time_mean.shape[0]):
         #     time_mean[t] *= height_weight[t]
+
         #
         # height_weighted_mean = np.mean(time_mean, axis=0)
-        time_height_mean = np.mean(radar_maps, axis=(0, 1))
-        x, y = time_height_mean.shape
+        # time_height_mean = np.mean(radar_maps, axis=(0, 1))
+        # time_mean = np.mean(radar_maps, axis=0)
+        # _4th_ = time_mean[3]
+        # time_height_mean = _4th_
+        # x, y = time_height_mean.shape
         # start_x = x // 2 - (self.config.crop_center // 2)
         # start_y = y // 2 - (self.config.crop_center // 2)
-
-        start_x = 0
-        start_y = 0
-        cropped = time_height_mean[start_y: start_y+self.config.crop_center, start_x: start_x+self.config.crop_center]
-        compressed = cropped.flatten()
+        #
+        # start_x = 0
+        # start_y = 0
+        # cropped = time_height_mean[start_y: start_y+self.config.crop_center, start_x: start_x+self.config.crop_center]
+        # compressed = cropped.flatten()
 
         # compressed = time_height_mean.flatten()
-        return compressed
+
+        # compressed = radar_maps.flatten()
+
 
     def train(self):
         avg_losses = []
@@ -347,13 +383,18 @@ class RainRegression:
                 start = time.time()
                 print('*'*8)
                 print(np.random.choice(EMOJIS)+'  epoch: {}'.format(ep))
-                avg_loss, avg_rmse, avg_val_rmse = self.train_one_epoch(sess)
-                print(np.random.choice(EMOJIS)+'  epoch loss: {}'.format(avg_loss))
-                print(np.random.choice(EMOJIS)+'  epoch RMSE: {}'.format(avg_rmse))
-                print(np.random.choice(EMOJIS)+'  epoch validation RMSE: {}'.format(avg_val_rmse))
-                avg_losses.append(avg_loss)
-                avg_RMSEs.append(avg_rmse)
-                avg_val_RMSEs.append(avg_val_rmse)
+                # avg_loss, avg_rmse, avg_val_rmse = self.train_one_epoch(sess)
+                _loss, _rmse, _val_rmse = self.train_one_epoch(sess)
+                print(np.random.choice(EMOJIS)+'  epoch loss: {}'.format(np.mean(_loss)))
+                print(np.random.choice(EMOJIS)+'  epoch RMSE: {}'.format(np.mean(_rmse)))
+                print(np.random.choice(EMOJIS)+'  epoch validation RMSE: {}'.format(np.mean(_val_rmse)))
+                # avg_losses.append(avg_loss)
+                # avg_RMSEs.append(avg_rmse)
+                # avg_val_RMSEs.append(avg_val_rmse)
+
+                avg_losses += _loss
+                avg_RMSEs += _rmse
+                avg_val_RMSEs += _rmse
 
                 end = time.time()
 
