@@ -29,6 +29,8 @@ import os
 import draw_performance
 import time
 
+import matplotlib.pyplot as plt
+
 EMOJIS = ['\U0001f601', '\U0001f602', '\U0001f603', '\U0001f604']
 
 
@@ -473,4 +475,15 @@ if __name__ == '__main__':
         rain_regression = RainRegression(test=False)
         losses, RMSEs, val_RMSE = rain_regression.train()
 
-    draw_performance.draw(losses, RMSEs, val_RMSE)
+    plt.subplot(2, 1, 1)
+    x = range(len(losses))
+
+    plt.plot(x, losses, 'g-')
+    plt.title('Train Loss')
+
+    plt.subplot(2, 1, 2)
+
+    plt.plot(x, RMSEs, 'b-', x, val_RMSE, 'g-')
+    plt.title('Train(-Blue-) RSME, and Validation(-Green-) RSME')
+
+    plt.show()
