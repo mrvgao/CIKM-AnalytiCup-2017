@@ -33,20 +33,20 @@ EMOJIS = ['\U0001f601', '\U0001f602', '\U0001f603', '\U0001f604']
 
 
 class Config:
-    learning_rate = 2.5 * 1e-4 # learning_rate
+    learning_rate = 5 * 1e-6 # learning_rate
     regularization_rate = 1e-3 # regularization rate
     batch_size = 256
     epoch = 100
-    crop_center = 101
+    crop_center = 10
     # x_size = 101 * 101
     x_size = crop_center * crop_center
     train_data_size = 2000
-    drop_out = 0.9
+    drop_out = 0.5
 
     TIME = 15
     HEIGHT = 4
 
-    hidden_size = [150, 150]
+    hidden_size = [5000, 5000]
 
 
 np.random.seed(0)
@@ -150,7 +150,7 @@ class RainRegression:
 
             # layout_2_output = tf.abs(tf.matmul(tanh_output, weights_2) + bias_2)
             layout_2_output = tf.matmul(tanh_output, weights_2 + bias_2)
-            layout_2_output = tf.nn.dropout(layout_2_output)
+            layout_2_output = tf.nn.dropout(layout_2_output, keep_prob=self.config.drop_out)
 
             tf.add_to_collection(name=parameters, value=weights_2)
             tf.add_to_collection(name=parameters, value=bias_2)
@@ -171,7 +171,7 @@ class RainRegression:
 
         need_regularize = tf.get_collection(key=parameters)
 
-        l2_loss = np.mean(map(lambda w: tf.nn.l2_loss(w), need_regularize))
+        l2_loss = sum(map(lambda w: tf.nn.l2_loss(w), need_regularize))/(len(need_regularize))
 
         tf.add_to_collection(name='l2_loss', value=l2_loss)
 
@@ -205,7 +205,7 @@ class RainRegression:
         shuffled_indices = np.random.choice(np.random.permutation(range(1, 10000)), self.config.train_data_size)
 
 
-        test_ratio = 0.15
+        test_ratio = 0.01
         train_ratio = (1 - test_ratio) * .8
         validation_ratio = (1 - test_ratio) * .2
 
@@ -297,7 +297,6 @@ class RainRegression:
         for i, index in enumerate(indices):
             train_data[i,:] = self.cache[index][1]
             train_labels[i] = self.cache[index][0]
-
         return train_data, train_labels
 
     # @staticmethod
@@ -322,14 +321,14 @@ class RainRegression:
         #
         # height_weighted_mean = np.mean(time_mean, axis=0)
         time_height_mean = np.mean(radar_maps, axis=(0, 1))
-        # x, y = time_height_mean.shape
-        # start_x = x // 2 - (self.config.crop_center // 2)
-        # start_y = y // 2 - (self.config.crop_center // 2)
-        #
-        # cropped = time_height_mean[start_y: start_y+self.config.crop_center, start_x: start_x+self.config.crop_center]
-        # compressed = cropped.flatten()
+        x, y = time_height_mean.shape
+        start_x = x // 2 - (self.config.crop_center // 2)
+        start_y = y // 2 - (self.config.crop_center // 2)
 
-        compressed = time_height_mean.flatten()
+        cropped = time_height_mean[start_y: start_y+self.config.crop_center, start_x: start_x+self.config.crop_center]
+        compressed = cropped.flatten()
+
+        # compressed = time_height_mean.flatten()
         return compressed
 
     def train(self):
@@ -367,8 +366,8 @@ class RainRegression:
         return yhat
 
     def loss(self, yhat):
-        loss_mse = tf.nn.l2_loss(yhat - self.labels)
-        l2_loss = tf.get_collection('l2_loss')[0]
+        loss_mse = tf.nn.l2_loss(yhat - self.labels)  # ~ 0
+        l2_loss = tf.get_collection('l2_loss')[0] # ~ 0
         L = loss_mse + self.config.regularization_rate * l2_loss
 
         return L

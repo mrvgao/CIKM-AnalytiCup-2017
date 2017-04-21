@@ -29,7 +29,7 @@ def track_plot(func):
         plt.plot(x, wrapper.trRSME, 'b-', x, wrapper.valRSME, 'g-')
         plt.title('Train(-Blue-) RSME, and Validation(-Green-) RSME')
 
-        # plt.pause(0.001)
+        plt.pause(0.00001)
         plt.show(block=False)
 
         return loss, trRMSE, valRSME
