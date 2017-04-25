@@ -9,13 +9,14 @@ import sklearn
 import os
 import pickle
 
-script_dir = os.path.dirname(__file__)
-print(script_dir)
-train_dir = script_dir + '/CIKM2017_train'
-train_file = 'train.txt'
 
 
-def read_data(test=True):
+def read_data(test=True, train_dir=None):
+    script_dir = os.path.dirname(__file__)
+    print(script_dir)
+    train_dir = train_dir or '/CIKM2017_train'
+    train_dir = script_dir + train_dir
+    train_file = 'train.txt'
     data = []
     with open(os.path.join(train_dir, train_file)) as file:
         print('processing start')
@@ -86,16 +87,14 @@ def parse_single_data(single_data):
     return train_no, labels, radar_maps
 
 
-data = read_data()
-assert data[0] is not None
-single = data[0]
-assert isinstance(parse_single_data(single)[0], str)
-assert parse_single_data(single)[2].shape == (15, 4, 101, 101)
-
-assert save_data_to_pickle(data)
-
-print('test done!')
-
 if __name__ == '__main__':
-    save_data_to_pickle(read_data(test=False), test=False)
-    print('save done!')
+    data = read_data()
+    assert data[0] is not None
+    single = data[0]
+    assert isinstance(parse_single_data(single)[0], str)
+    assert parse_single_data(single)[2].shape == (15, 4, 101, 101)
+
+    assert save_data_to_pickle(data)
+
+    print('test done!')
+

@@ -14,10 +14,7 @@ def normalize_single_one(radar_maps):
     return radar_maps
 
 
-def normalize_batch():
-    dir = './pickle'
-    train_size = 10000
-
+def normalize_batch(train_size=10000, dir='pickle'):
     for i in range(train_size):
 
         if i % 100 == 0:
@@ -44,15 +41,13 @@ def process_single(file_name):
 
     return datum
 
-
-for i in range(100):
-    index = np.random.choice(range(10000), size=1)[0]
-    datum = process_single('./pickle/train_{}.pickle'.format(index))
-
-    assert np.abs(np.mean(datum['radar_maps'])-0.0) < 5.0
-    assert np.std(np.mean(datum['radar_maps'])-1.0) < 5.0
-
-print('test done!')
-
 if __name__ == '__main__':
-   normalize_batch()
+    for i in range(100):
+        index = np.random.choice(range(10000), size=1)[0]
+        datum = process_single('./pickle/train_{}.pickle'.format(index))
+
+        assert np.abs(np.mean(datum['radar_maps'])-0.0) < 5.0
+        assert np.std(np.mean(datum['radar_maps'])-1.0) < 5.0
+
+    print('test done!')
+
