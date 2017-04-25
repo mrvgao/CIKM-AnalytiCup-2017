@@ -3,6 +3,7 @@ matplotlib.use('TkAgg')
 
 from functools import wraps
 import  matplotlib.pyplot as plt
+import pickle
 
 
 def track_plot(func):
@@ -62,3 +63,12 @@ def draw(loss, trRSME, valRSME):
     plt.title('Train(-Blue-) RSME, and Validation(-Green-) RSME')
 
     plt.show()
+
+if __name__ == '__main__':
+    with open('trace.pickle', 'rb') as f:
+        trace = pickle.load(f)
+
+    draw(trace['loss'], trace['RMSE'], trace['val_RMSE'])
+
+
+
