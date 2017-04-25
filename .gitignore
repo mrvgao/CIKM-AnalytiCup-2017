@@ -1,0 +1,9 @@
+draw_pics_test.py
+CIKM2017_testA/
+CIKM2017_train/
+Untitled*
+.idea/*
+pickle*
+__pycache__/
+get_emoji.py
+trace.pickle
