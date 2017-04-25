@@ -35,10 +35,10 @@ EMOJIS = ['\U0001f601', '\U0001f602', '\U0001f603', '\U0001f604']
 
 
 class Config:
-    learning_rate = 4 * 1e-6 # learning_rate
-    regularization_rate = 1e-1 # regularization rate
+    learning_rate = 1e-4 # learning_rate
+    regularization_rate = 1e-2 # regularization rate
     batch_size = 256
-    epoch = 100
+    epoch = 5000
     crop_center = 10
     location = 101
 
@@ -46,21 +46,27 @@ class Config:
     HEIGHT = 4
 
     train_data_size = 1000
-    drop_out = 0.5
+    drop_out = 0.8
 
-    hidden_size = [1000, 1000]
+    hidden_size = [10, 10, 10, 10, 10, 10, 10]
 
-    matrix_keep_prob = 0.03
+    matrix_keep_prob = 0.01
 
-np.random.seed(0)
+    n_steps = 72
+    n_hidden = 200
+
+np.random.seed(2)
 
 
 class RainRegression:
     def __init__(self, test=True):
         self.config = Config()
 
-        self.X_dimension, self.keep_indices = self.__get_x_dimension()
+        self.X_dimension = int(self.config.HEIGHT * self.config.TIME \
+                               * self.config.location * self.config.location
+                               * self.config.matrix_keep_prob)
 
+        self.parameters = 'parameters'
         self.__add_model()
 
         self.train_indices, self.validation_indices, self.test_indices = self.split_test_train()
@@ -73,18 +79,6 @@ class RainRegression:
         self.cache = self.__load_data()
 
         assert len(self.train_indices) / self.config.batch_size >= 1
-
-    def __get_x_dimension(self):
-
-        random_matrix = np.random.rand(self.config.TIME, self.config.HEIGHT, self.config.location, self.config.location)
-
-        random_matrix[random_matrix > self.config.matrix_keep_prob] = 0
-
-        keep_indices = random_matrix.nonzero()
-
-        X_dimension = random_matrix[keep_indices].shape[0]
-
-        return X_dimension, keep_indices
 
     def __load_data(self):
         '''
@@ -119,78 +113,17 @@ class RainRegression:
         return data_cache
 
     def __add_model(self):
-
-        parameters = 'parameters'
-
         with tf.variable_scope('train_data') as scope:
             self.X_train = tf.placeholder(tf.float32, shape=(None, self.X_dimension))
             self.labels = tf.placeholder(tf.float32, shape=(None, ))
 
-        fc_layer_1 = 'fc_layer_1'
-        with tf.variable_scope(fc_layer_1) as fc_scope:
-            WEIGHT_1, BIAS_1 = 'weight_1', 'bias_1'
-            weights_1 = tf.get_variable(name=WEIGHT_1, shape=(self.X_dimension, self.config.hidden_size[0]),
-                                        initializer=tf.contrib.layers.xavier_initializer())
+        # regression = self.MFC(self.X_train)
+        # regression = self.RNN(x)
+        regression = self.conv_net(self.X_train)
 
-            bias_1 = tf.get_variable(name=BIAS_1, shape=(self.config.hidden_size[0], ),
-                                     initializer=tf.constant_initializer(0.0))
+        need_regularize = tf.get_collection(key=self.parameters)
 
-            tf.add_to_collection(name=parameters, value=weights_1)
-            tf.add_to_collection(name=parameters, value=bias_1)
-
-        with tf.variable_scope(fc_layer_1, reuse=True) as fc_scope:
-
-            fc_scope.reuse_variables()
-
-            weights_1 = tf.get_variable(name=WEIGHT_1)
-            bias_1 = tf.get_variable(name=BIAS_1)
-
-            layout_1_output = tf.matmul(self.X_train, weights_1) + bias_1
-            layout_1_output = tf.nn.dropout(layout_1_output, keep_prob=self.config.drop_out)
-
-            # (batches, X_dimension) * (X_dimension, hidden_size_0) + (hidden_size_0, ) = (batches, hidden_size_0)
-
-        with tf.variable_scope('relu_1') as relu_scope:
-            tanh_output = tf.nn.relu(layout_1_output)
-            tanh_output = tf.nn.dropout(tanh_output, keep_prob=self.config.drop_out)
-
-        fc_layer_2 = 'fc_layer_2'
-        with tf.variable_scope(fc_layer_2) as fc_2_scope:
-            weights_2 = tf.get_variable(name='weights_2', shape=(self.config.hidden_size[0], self.config.hidden_size[1]),
-                                        initializer=tf.contrib.layers.xavier_initializer(seed=0))
-            bias_2 = tf.get_variable(name='bias_2', shape=(self.config.hidden_size[1], ),
-                                     initializer=tf.zeros_initializer())
-
-            # tanh output size is (batches, hidden_size)
-            # weights_2 size is (hidden_size_0, hidden_size_1), bias is (hidden_size[1], )
-            # layout_2_output = (batches, hidden_0) * (hidden_0, hidden_1) + bias_2 = (batches, hidden_1)
-
-            # layout_2_output = tf.abs(tf.matmul(tanh_output, weights_2) + bias_2)
-            layout_2_output = tf.matmul(tanh_output, weights_2 + bias_2)
-            layout_2_output = tf.nn.dropout(layout_2_output, keep_prob=self.config.drop_out)
-
-            tf.add_to_collection(name=parameters, value=weights_2)
-            tf.add_to_collection(name=parameters, value=bias_2)
-
-        with tf.variable_scope('tanh_1') as tanh:
-            tanh_output = tf.tanh(layout_2_output)
-
-        with tf.variable_scope('regression') as regression_scope:
-            # shape = (self.X_dimension, 1)
-            shape = (self.config.hidden_size[-1], 1)
-            a = tf.get_variable('a', shape=shape, initializer=tf.contrib.layers.xavier_initializer(seed=0))
-
-            b = tf.get_variable('b', shape=(), initializer=tf.zeros_initializer())
-
-            # regression = tf.abs(tf.matmul(tanh_output, a) + b)
-            regression = tf.abs(tf.matmul(tanh_output, a) + b)
-
-            tf.add_to_collection(name=parameters, value=a)
-            tf.add_to_collection(name=parameters, value=b)
-
-        need_regularize = tf.get_collection(key=parameters)
-
-        l2_loss = sum(map(lambda w: tf.nn.l2_loss(w), need_regularize))/(len(need_regularize))
+        l2_loss = sum(map(lambda w: tf.nn.l2_loss(w), need_regularize))
 
         tf.add_to_collection(name='l2_loss', value=l2_loss)
 
@@ -204,16 +137,155 @@ class RainRegression:
             # op_scope.reuse_variables()
             self.op = self.optimizer(self.loss)
 
-    def __conv_net(self, input):
+    def RNN(self, x):
+
+        with tf.variable_scope('rnn') as scope:
+            x = tf.unstack(x, self.config.n_steps, 1)
+
+            lstm_cell = tf.contrib.rnn.BasicLSTMCell(self.config.n_hidden, forget_bias=1.0)
+
+            outputs, status = tf.contrib.rnn.static_rnn(lstm_cell, x, dtype=tf.float32)
+
+            rnn_weight = tf.get_variable('rnn_weight', shape=(self.config.n_hidden, 1),
+                                         initializer=tf.truncated_normal_initializer(stddev=0.02))
+
+            rnn_bias = tf.get_variable('rnn_bias', shape=(),
+                                       initializer=tf.constant_initializer(0.0))
+
+            tf.add_to_collection(name=self.parameters, value=rnn_weight)
+            tf.add_to_collection(name=self.parameters, value=rnn_bias)
+
+            return tf.matmul(outputs[-1], rnn_weight) + rnn_bias
+
+    def MFC(self, input):
+        # [fc => relu => batch-normai => ] * 4
+        for i in range(len(self.config.hidden_size)):
+            fc_layer = 'fc_layer_{}'.format(i)
+
+            with tf.variable_scope(fc_layer) as fc_scope:
+                if i == 0:
+                    weight_shape = (self.X_dimension, self.config.hidden_size[i])
+                    last_layer_output = input
+                else:
+                    weight_shape = (self.config.hidden_size[i-1], self.config.hidden_size[i])
+
+                bias_shape = (self.config.hidden_size[i], )
+
+                WEIGHT, BIAS = 'weight_{}'.format(i), 'bias_{}'.format(i)
+
+                weights = tf.get_variable(name=WEIGHT, shape=weight_shape,
+                                          initializer=tf.truncated_normal_initializer(stddev=0.05))
+
+                bias = tf.get_variable(name=BIAS, shape=bias_shape,
+                                       initializer=tf.constant_initializer(0.0))
+
+                tf.add_to_collection(name=self.parameters, value=weights)
+                tf.add_to_collection(name=self.parameters, value=bias)
+
+                layer_output = tf.matmul(last_layer_output, weights) + bias
+                layer_output = tf.nn.dropout(layer_output, keep_prob=self.config.drop_out)
+
+            with tf.variable_scope('BN') as bn_scope:
+                batch_normalized = tf.nn.batch_normalization(layer_output, mean=0, variance=1, offset=0, scale=100,
+                                                             variance_epsilon=1e-4)
+
+            with tf.variable_scope('relu_1') as relu_scope:
+                relu_output = tf.nn.relu(batch_normalized)
+                relu_output = tf.nn.dropout(relu_output, keep_prob=self.config.drop_out)
+
+            last_layer_output = relu_output
+
+        with tf.variable_scope('tanh_1') as tanh:
+            tanh_output = tf.tanh(last_layer_output)
+
+        with tf.variable_scope('regression') as regression_scope:
+            # shape = (self.X_dimension, 1)
+            shape = (self.config.hidden_size[-1], 1)
+            a = tf.get_variable('a', shape=shape, initializer=tf.contrib.layers.xavier_initializer(seed=0))
+
+            b = tf.get_variable('b', shape=(), initializer=tf.zeros_initializer())
+
+            regression = tf.matmul(tanh_output, a) + b
+
+            tf.add_to_collection(name=self.parameters, value=a)
+            tf.add_to_collection(name=self.parameters, value=b)
+
+        return regression
+
+    def conv2d(self, x, W, b, strides=1):
+        x = tf.nn.conv2d(x, W, strides=[1, strides, strides, 1], padding='SAME')
+        x = tf.nn.bias_add(x, b)
+        return tf.nn.relu(x)
+
+    def conv_net(self, input):
         F = [16, 16, 3, 6]
         strides = [1, 2, 2, 1]
         padding = 'VALID'
 
-        # input is batch, 101, 101, 3
+        x = tf.reshape(input, shape=[-1, 85, 72, 1])
 
-        # output height = ceil(float(101 - 16 + 1)/2) = 43
-        # output width = ceil(float(101 - 16 + 1)/2) = 43
-        pass
+        with tf.variable_scope('conv1') as conv1_scope:
+            filter = tf.get_variable('filter_1', shape=(5, 6, 1, 6),
+                                     initializer=tf.contrib.layers.xavier_initializer(seed=0))
+
+            # if padding is "SAME", output shape is [-1, 85, 72, 6]
+
+            bias = tf.get_variable('bias_1', shape=(6,),
+                                   initializer=tf.truncated_normal_initializer(stddev=0.05))
+
+            conv_output = self.conv2d(x, filter, bias)
+
+            pooling_output = tf.nn.max_pool(conv_output, ksize=[1, 5, 6, 1], strides=[1, 1, 1, 1],
+                                            padding='VALID')
+
+            batch_normalized = tf.nn.batch_normalization(pooling_output, mean=0, variance=1, offset=0, scale=100,
+                                                         variance_epsilon=1e-4)
+
+            tf.add_to_collection(name=self.parameters, value=filter)
+            tf.add_to_collection(name=self.parameters, value=bias)
+
+            # output size is 81 * 67 * 6
+
+            print(batch_normalized.get_shape().as_list())
+
+        with tf.variable_scope('conv2') as conv2_scope:
+            filter = tf.get_variable(name='filter_2', shape=(10, 10, 6, 32),
+                                     initializer=tf.contrib.layers.xavier_initializer(seed=0))
+            bias = tf.get_variable(name='bias_2', shape=(32,),
+                                   initializer=tf.constant_initializer(0.0))
+
+            conv_output = self.conv2d(batch_normalized, filter, bias)
+
+            print(conv_output.get_shape().as_list())
+            pooling_output = tf.nn.max_pool(conv_output, ksize=[1, 54, 40, 1], strides=[1, 1, 1, 1],
+                                            padding='VALID')
+
+            # output is 28, 28, 32
+
+            batch_normalized = tf.nn.batch_normalization(pooling_output, mean=0, variance=1, offset=0, scale=100,
+                                                         variance_epsilon=1e-4)
+
+            tf.add_to_collection(name=self.parameters, value=filter)
+            tf.add_to_collection(name=self.parameters, value=bias)
+
+            print(batch_normalized.get_shape().as_list())
+
+        with tf.variable_scope('fc1') as fc_1:
+            fc_dimension = 28 * 28 * 32
+            fc1 = tf.reshape(batch_normalized, shape=[-1, fc_dimension])
+
+            weight_fc = tf.get_variable('fc_w_1', shape=(fc_dimension, 1),
+                                        initializer=tf.contrib.layers.xavier_initializer(seed=0))
+
+            bias_fc = tf.get_variable('fc_b_1', shape=(),
+                                      initializer=tf.constant_initializer(0.0))
+
+            out = tf.matmul(fc1, weight_fc) + bias_fc
+
+            tf.add_to_collection(name=self.parameters, value=weight_fc)
+            tf.add_to_collection(name=self.parameters, value=bias_fc)
+
+        return out
 
     def split_test_train(self):
         '''
@@ -221,8 +293,12 @@ class RainRegression:
         :return: [train_indices], [validation_indices], [test_indices]
         '''
 
-        shuffled_indices = np.random.choice(np.random.permutation(range(1, 10000)), self.config.train_data_size)
+        shuffled_indices = np.random.permutation(range(1, 10000))
 
+        for i in range(100):
+            shuffled_indices = np.random.permutation(shuffled_indices)
+
+        shuffled_indices = np.random.choice(np.random.permutation(range(1, 10000)), self.config.train_data_size)
 
         test_ratio = 0.01
         train_ratio = (1 - test_ratio) * .8
@@ -245,16 +321,21 @@ class RainRegression:
         :return: loss value
         '''
 
-        total_batches = int(len(self.train_indices) / self.config.batch_size)
 
         losses = []
         RMSEs = []
         val_RMSEs = []
 
+        start = 0
+        self.config.batch_size = int(len(self.train_indices) * 0.2)
+
+        total_batches = int((len(self.train_indices) - start) / self.config.batch_size)
+
         for b in range(total_batches):
             indices = np.random.choice(self.train_indices,
-                                       self.config.batch_size,
-                                       replace=True)
+                                       self.config.batch_size, replace=True)
+            # indices = self.train_indices[start: start+self.config.batch_size]
+            start += self.config.batch_size
 
             train_data, train_labels = self.get_data_by_indices(indices)
 
@@ -328,7 +409,7 @@ class RainRegression:
 
     def compress_radar_maps(self, radar_maps):
 
-        compressed = radar_maps[self.keep_indices]
+        compressed = np.random.choice(radar_maps.flatten(), self.X_dimension)
         return compressed
 
         # input data is TIME * HEIGHT * 101 * 101, if we get the random submatrix
@@ -370,7 +451,6 @@ class RainRegression:
 
         # compressed = radar_maps.flatten()
 
-
     def train(self):
         avg_losses = []
         avg_RMSEs = []
@@ -411,9 +491,12 @@ class RainRegression:
         return yhat
 
     def loss(self, yhat):
-        loss_mse = tf.nn.l2_loss(yhat - self.labels)  # ~ 0
+        epsilon = 1e-3
+
+        # loss_mse = tf.reduce_mean(tf.abs(self.labels - yhat) ** 2)
+        loss_mse = tf.sqrt(tf.reduce_mean(tf.square(self.labels - yhat)))
         l2_loss = tf.get_collection('l2_loss')[0] # ~ 0
-        L = loss_mse + self.config.regularization_rate * l2_loss
+        L = loss_mse + self.config.regularization_rate * (l2_loss)
 
         return L
 
@@ -422,9 +505,9 @@ class RainRegression:
         starter_learning_rate = self.config.learning_rate
         # learning_rate = starter_learning_rate
         learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
-                                                   10000, 0.96, staircase=True)
+                                                   5000, 0.96, staircase=True)
 
-        op = tf.train.RMSPropOptimizer(learning_rate=learning_rate).minimize(loss=L)
+        op = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss=L)
 
         return op
 
@@ -467,6 +550,16 @@ def dtest():
 
 # dtest()
 
+
+def save_train_trace(loss, RMSE, val_RMSE):
+    trace = {'loss': loss, 'RMSE': RMSE, 'val_RMSE': val_RMSE}
+
+    with open('trace.pickle', 'wb') as f:
+        pickle.dump(trace, f)
+
+    print('trace loaded!')
+
+
 if __name__ == '__main__':
     print('begin training..')
 
@@ -475,15 +568,4 @@ if __name__ == '__main__':
         rain_regression = RainRegression(test=False)
         losses, RMSEs, val_RMSE = rain_regression.train()
 
-    plt.subplot(2, 1, 1)
-    x = range(len(losses))
-
-    plt.plot(x, losses, 'g-')
-    plt.title('Train Loss')
-
-    plt.subplot(2, 1, 2)
-
-    plt.plot(x, RMSEs, 'b-', x, val_RMSE, 'g-')
-    plt.title('Train(-Blue-) RSME, and Validation(-Green-) RSME')
-
-    plt.show()
+    save_train_trace(losses, RMSEs, val_RMSE)
