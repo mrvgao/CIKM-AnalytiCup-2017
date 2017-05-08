@@ -35,9 +35,9 @@ EMOJIS = ['\U0001f601', '\U0001f602', '\U0001f603', '\U0001f604']
 
 
 class Config:
-    learning_rate = 1e-4 # learning_rate
+    learning_rate = 1e-5 # learning_rate
     regularization_rate = 1e-2 # regularization rate
-    batch_size = 256
+    batch_size = 50
     epoch = 5000
     crop_center = 10
     location = 101
@@ -117,9 +117,9 @@ class RainRegression:
             self.X_train = tf.placeholder(tf.float32, shape=(None, self.X_dimension))
             self.labels = tf.placeholder(tf.float32, shape=(None, ))
 
-        # regression = self.MFC(self.X_train)
+        regression = self.MFC(self.X_train)
         # regression = self.RNN(x)
-        regression = self.conv_net(self.X_train)
+        # regression = self.conv_net(self.X_train)
 
         need_regularize = tf.get_collection(key=self.parameters)
 
@@ -225,7 +225,7 @@ class RainRegression:
         x = tf.reshape(input, shape=[-1, 85, 72, 1])
 
         with tf.variable_scope('conv1') as conv1_scope:
-            filter = tf.get_variable('filter_1', shape=(5, 6, 1, 6),
+            filter = tf.get_variable('filter_1', shape=(1, 1, 1, 6),
                                      initializer=tf.contrib.layers.xavier_initializer(seed=0))
 
             # if padding is "SAME", output shape is [-1, 85, 72, 6]
@@ -249,7 +249,7 @@ class RainRegression:
             print(batch_normalized.get_shape().as_list())
 
         with tf.variable_scope('conv2') as conv2_scope:
-            filter = tf.get_variable(name='filter_2', shape=(10, 10, 6, 32),
+            filter = tf.get_variable(name='filter_2', shape=(1, 1, 6, 32),
                                      initializer=tf.contrib.layers.xavier_initializer(seed=0))
             bias = tf.get_variable(name='bias_2', shape=(32,),
                                    initializer=tf.constant_initializer(0.0))
